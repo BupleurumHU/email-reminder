@@ -1,0 +1,96 @@
+  name: 定时提醒邮件
+
+  on:
+    schedule:
+      - cron: '0 1 * * *'   # 每天北京时间上午9点检查一次
+    workflow_dispatch:       # 允许手动触发
+
+  jobs:
+    check-and-send:
+      runs-on: ubuntu-latest
+      steps:
+        - name: 检出仓库
+          uses: actions/checkout@v4
+
+        - name: 检查是否到达发送日期
+          id: check
+          run: |
+            # ====== 配置区 ======
+            INTERVAL_DAYS=180   # 改成你想要的天数，如 160
+            # ====================
+
+            LAST_SENT_FILE=".last_sent_date"
+
+            # 读取上次发送日期
+            if [ -f "$LAST_SENT_FILE" ]; then
+              LAST_SENT=$(cat "$LAST_SENT_FILE")
+            else
+              LAST_SENT="1970-01-01"
+            fi
+
+            # 计算天数差
+            LAST_SENT_EPOCH=$(date -d "$LAST_SENT" +%s)
+            TODAY_EPOCH=$(date -d "today" +%s)
+            DIFF_DAYS=$(( (TODAY_EPOCH - LAST_SENT_EPOCH) / 86400 ))
+
+            echo "上次发送: $LAST_SENT"
+            echo "间隔天数: $DIFF_DAYS / $INTERVAL_DAYS"
+
+            if [ "$DIFF_DAYS" -ge "$INTERVAL_DAYS" ]; then
+              echo "should_send=true" >> "$GITHUB_OUTPUT"
+              echo "✅ 已达到${INTERVAL_DAYS}天，准备发送"
+            else
+              echo "should_send=false" >> "$GITHUB_OUTPUT"
+              REMAINING=$(( INTERVAL_DAYS - DIFF_DAYS ))
+              echo "⏳ 还差${REMAINING}天，跳过"
+            fi
+
+        - name: 发送到第一个QQ邮箱
+          if: steps.check.outputs.should_send == 'true'
+          uses: dawidd6/action-send-mail@v3
+          with:
+            server_address: smtp.gmail.com
+            server_port: 465
+            username: ${{ secrets.GMAIL_USER }}
+            password: ${{ secrets.GMAIL_PASS }}
+            subject: "⏰ 180天定期提醒"
+            to: ${{ secrets.QQ_EMAIL_1 }}
+            from: ${{ secrets.GMAIL_USER }}
+            body: |
+              你好！
+
+              这是一封自动提醒邮件，提醒你该做某件事了。
+
+              距离上次提醒已经过了180天，请记得处理！
+
+              ——来自你的自动化提醒系统
+
+        - name: 发送到第二个QQ邮箱
+          if: steps.check.outputs.should_send == 'true'
+          uses: dawidd6/action-send-mail@v3
+          with:
+            server_address: smtp.gmail.com
+            server_port: 465
+            username: ${{ secrets.GMAIL_USER }}
+            password: ${{ secrets.GMAIL_PASS }}
+            subject: "⏰ 180天定期提醒"
+            to: ${{ secrets.QQ_EMAIL_2 }}
+            from: ${{ secrets.GMAIL_USER }}
+            body: |
+              你好！
+
+              这是一封自动提醒邮件，提醒你该做某件事了。
+
+              距离上次提醒已经过了180天，请记得处理！
+
+              ——来自你的自动化提醒系统
+
+        - name: 更新发送日期
+          if: steps.check.outputs.should_send == 'true'
+          run: |
+            date +%Y-%m-%d > .last_sent_date
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add .last_sent_date
+            git commit -m "更新发送日期: $(date +%Y-%m-%d)"
+            git push
