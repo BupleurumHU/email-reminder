@@ -4,6 +4,8 @@
     schedule:
       - cron: '0 1 * * *'   # 每天北京时间上午9点检查一次
     workflow_dispatch:       # 允许手动触发
+  permissions:
+    contents: write
 
   jobs:
     check-and-send:
@@ -11,6 +13,21 @@
       steps:
         - name: 检出仓库
           uses: actions/checkout@v4
+
+        # 每周保活一次（无实际内容变更）
+        - name: 保活心跳
+          if: ${{ github.event_name == 'schedule' }}
+          run: |
+            TODAY=$(date +%u)
+            # 每周日写一次心跳，其余天跳过
+            if [ "$TODAY" -eq 7 ]; then
+              echo "heartbeat $(date)" > .heartbeat
+              git config user.name "github-actions[bot]"
+              git config user.email "github-actions[bot]@users.noreply.github.com"
+              git add .heartbeat
+              git diff --cached --quiet || git commit -m "heartbeat: $(date +%Y-%m-%d)"
+              git push
+            fi
 
         - name: 检查是否到达发送日期
           id: check
