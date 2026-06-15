@@ -16,7 +16,7 @@
           id: check
           run: |
             # ====== 配置区 ======
-            INTERVAL_DAYS=180   # 改成你想要的天数，如 160
+            INTERVAL_DAYS=1   # 改成你想要的天数，如 160
             # ====================
 
             LAST_SENT_FILE=".last_sent_date"
